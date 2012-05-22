@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ "$1" = "" ]; then
+	echo "must specify a build name"
+	exit 1
+fi
+
+set -ex
+
+rm -rf $HOME/install/$1
+git clean -dfx
+
+./configure --prefix=$HOME/install/$1 --enable-depend --enable-debug ${EXTRA_OPTIONS}
+
+make -j10
+make -C contrib/pgbench
+
+make check
+
+make install
+make -C contrib/pgbench install

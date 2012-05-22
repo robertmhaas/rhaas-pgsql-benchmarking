@@ -1,0 +1,48 @@
+#!/bin/sh
+
+clients="32 1 8"
+#clients="32 1 2 4 8 16"
+#clients="1 16 32 48 64 80 8 24 40 56 72"
+#clients="4 20 36 52 68 2 12 28 44 60 76"
+times="1800"
+scales="1000 3000"
+types="p"
+branches="master"
+
+~/install/master/bin/pg_ctl stop -mf
+
+for x in 1 2 3; do
+  for client in $clients; do
+    for time in $times; do
+      for scale in $scales; do
+        for branch in $branches; do
+          for type in $types; do
+            sync
+            ident="w$type.$branch.$client.$scale.$time"
+			echo "run=$x clients=$client time=$time scale=$scale branch=$branch type=$type"
+			~/install/$branch/bin/pg_ctl start -l ~/log/log.$ident
+			sleep 5
+			~/install/$branch/bin/dropdb rhaas
+			~/install/$branch/bin/createdb rhaas
+			if [ $type = u ]; then
+				~/install/master/bin/pgbench -i -s $scale --unlogged-tables
+			else
+				~/install/master/bin/pgbench -i -s $scale
+			fi
+			if [ $type = s ]; then
+				extraopts="-n -S"
+			else
+				extraopts="-n"
+			fi
+			sleep 5
+			~/install/master/bin/pgbench -T $time -c $client -j $client $extraopts \
+				>> ~/results/results$ident
+			~/install/master/bin/psql -c CHECKPOINT
+			~/install/$branch/bin/pg_ctl stop -m fast
+			sleep 5
+          done
+		done
+	  done
+	done
+  done
+done

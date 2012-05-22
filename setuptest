@@ -1,0 +1,18 @@
+#!/bin/bash
+
+branch=$1
+: ${branch:=master}
+echo "setting up using branch $branch"
+
+rm -rf $PGDATA
+~/install/$branch/bin/initdb
+cat >> $PGDATA/postgresql.conf <<EOM;
+shared_buffers = 8GB
+maintenance_work_mem = 1GB
+synchronous_commit = off
+checkpoint_segments = 300
+checkpoint_timeout = 15min
+checkpoint_completion_target = 0.9
+wal_writer_delay = 20ms
+log_line_prefix = '%t [%p] '
+EOM

@@ -1,0 +1,40 @@
+#!/bin/sh
+
+clients="1 2 4 8 12 16 20 24 28 32 36 40 44 48 52 56 60 64 68 72 76 80"
+times="300"
+scales="3000 10000"
+branches="master"
+
+~/install/master/bin/pg_ctl stop -mf
+
+for scale in $scales; do
+
+  # Set up for next scale factor.
+  echo "initializing for scale=$scale"
+  ~/install/master/bin/pg_ctl start -l ~/log/log.init.$scale
+  sleep 5
+  ~/install/master/bin/dropdb rhaas
+  ~/install/master/bin/createdb rhaas
+  ~/install/master/bin/pgbench -i -s $scale
+  ~/install/master/bin/psql -c CHECKPOINT
+  ~/install/master/bin/pg_ctl stop -m fast
+
+  # Do all runs at this scale factor.
+  for x in 1 2 3; do
+    for client in $clients; do
+      for time in $times; do
+        for branch in $branches; do
+          ident="r.$branch.$client.$scale.$time"
+          echo "run=$x clients=$client time=$time scale=$scale branch=$branch"
+          ~/install/$branch/bin/pg_ctl start -l ~/log/log.$ident
+          sleep 5
+          ~/install/master/bin/pgbench -T $time -c $client -j $client -n -S \
+              >> ~/results/results$ident
+          ~/install/master/bin/psql -c CHECKPOINT
+          ~/install/$branch/bin/pg_ctl stop -m fast
+          sleep 5
+        done
+      done
+    done
+  done
+done

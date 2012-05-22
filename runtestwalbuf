@@ -1,0 +1,26 @@
+#!/bin/sh
+
+branch=master
+scale=300
+time=1800
+client=32
+
+for x in 1 2 3; do
+  for wb in 16MB 32MB 48MB 64MB 80MB 96MB 112MB 128MB 144MB 160MB; do
+    ~/install/$branch/bin/pg_ctl stop -mf
+    sleep 60
+    setuptest $branch
+    echo wal_buffers=\'$wb\' >> $PGDATA/postgresql.conf
+    ident="walbuf.$wb"
+    echo "run=$x wal_buffers=$wb"
+    ~/install/$branch/bin/pg_ctl start -l ~/log/log.$ident
+    sleep 15
+    ~/install/$branch/bin/createdb rhaas
+    ~/install/master/bin/pgbench -i -s $scale
+    sleep 5
+    ~/install/master/bin/pgbench -T $time -c $client -j $client -n \
+        >> ~/results/results$ident
+    psql -c CHECKPOINT
+    sleep 60
+  done
+done

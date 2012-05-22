@@ -1,0 +1,48 @@
+#!/bin/sh
+
+clients="32 1 8"
+times="1800"
+scales="100"
+types="p"
+branches="background-write-clog-evictclean master"
+
+~/install/master/bin/pg_ctl stop -mf
+
+for x in 1 2 3; do
+  for client in $clients; do
+    for time in $times; do
+      for scale in $scales; do
+        for branch in $branches; do
+          for type in $types; do
+            ident="l$type.$branch.$client.$scale.$time"
+            echo "run=$x clients=$client time=$time scale=$scale branch=$branch type=$type"
+            ~/install/$branch/bin/pg_ctl start -l ~/log/log.$ident
+            sleep 5
+            ~/install/$branch/bin/dropdb rhaas
+            ~/install/$branch/bin/createdb rhaas
+            if [ $type = u ]; then
+                ~/install/master/bin/pgbench -i -s $scale --unlogged-tables
+            else
+                ~/install/master/bin/pgbench -i -s $scale
+            fi
+            if [ $type = s ]; then
+                extraopts="-l -n -S"
+            else
+                extraopts="-l -n"
+            fi
+            sleep 5
+            mkdir -p  ~/results/latency/$ident.$x || exit 1
+            cd ~/results/latency/$ident.$x || exit 1
+            ~/install/master/bin/pgbench -T $time -c $client -j $client $extraopts \
+                >> ~/results/results$ident
+            gzip pgbench_log.*
+            ~/install/master/bin/psql -c CHECKPOINT
+            ~/install/$branch/bin/pg_ctl stop -m fast
+            sync
+            sleep 5
+          done
+        done
+      done
+    done
+  done
+done
